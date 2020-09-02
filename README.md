@@ -3,10 +3,9 @@ Facial Detection, Machine Learning
 
 ## Development Environment
 
-pythond on MAC
-
-use the brew to manage the python versioning
+python and pip on MAC
 ```
+# use the brew to manage the python versioning
 $ brew list | grep python
 python
 
@@ -26,7 +25,24 @@ alias python=/usr/local/bin/python3
 $ pip -V
 pip 19.0.3 from /Library/Python/2.7/site-packages/pip-19.0.3-py2.7.egg/pip (python 2.7)
 
+# To ensure we're installing packages compatible with our new version of Python
+$ which pip3
+/usr/local/bin/pip3
 
+# add it to our shell configuration file
+$ echo "alias pip=/usr/local/bin/pip3" >> ~/.zshrc 
+# or for Bash
+$ echo "alias pip=/usr/local/bin/pip3" >> ~/.bashrc
+
+# confirm that running pip points to pip3 by opening a new shell or by resetting our current shell
+# This command reloads the current shell without exiting the session
+# Alternatively, exit the shell and start a new one
+$ exec $0
+$ chsh -s /bin/zsh
+
+# Now we can look to see where pip points us
+$ which pip
+pip: aliased to /usr/local/bin/pip3
 ```
  (* don't do manually move the symlink or macOS python 3 installer: https://opensource.com/article/19/5/python-3-default-mac)
  
