@@ -62,4 +62,5 @@ install other requirements
 ```
 pip install opencv-python
 pip install matplotlib pandas numpy pillow scipy torch torchvision
+pip install torchsummary
 ```
