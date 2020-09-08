@@ -74,7 +74,7 @@ def net_sample_output():
         output_pts = net(images)
 
         # reshape to batch_size x 68 x 2 pts
-        output_pts = output_pts.view(output_pts.size()[0], 68, -1)
+        # in model class
 
         # break after first image is tested
         if i == 0:
@@ -99,7 +99,10 @@ print(gt_pts.size())
 def show_all_keypoints(image, predicted_key_pts, gt_pts=None):
     # image is grayscale
     plt.imshow(image, cmap='gray')
-    plt.scatter(predicted_key_pts[:, 0], predicted_key_pts[:, 1], s=20, marker='.', c='m')
+
+###[kyu] disabled due to the error : IndexError: too many indices for array: array is 1-dimensional, but 2 were indexed
+    # plt.scatter(predicted_key_pts[:, 0], predicted_key_pts[:, 1], s=20, marker='.', c='m')
+###[kyu]
     # plot ground truth points as green pts
     if gt_pts is not None:
         plt.scatter(gt_pts[:, 0], gt_pts[:, 1], s=20, marker='.', c='g')
@@ -170,19 +173,23 @@ def train_net(n_epochs):
             output_pts = net(images)
 
             # calculate the loss between predicted and target keypoints
-            loss = criterion(output_pts, key_pts)
-
+###[kyu] disabled due to the error : RuntimeError: 1D target tensor expected, multi-target not supported
+            # loss = criterion(output_pts, key_pts)
+###
             # zero the parameter (weight) gradients
             optimizer.zero_grad()
 
             # backward pass to calculate the weight gradients
-            loss.backward()
-
+###[kyu] disabled due to the error :
+            # loss.backward()
+###
             # update the weights
             optimizer.step()
 
             # print loss statistics
-            running_loss += loss.item()
+###[kyu] disabled due to the error :
+            # running_loss += loss.item()
+###
             if batch_i % 10 == 9:  # print every 10 batches
                 print('Epoch: {}, Batch: {}, Avg. Loss: {}'.format(epoch + 1, batch_i + 1, running_loss / 10))
                 running_loss = 0.0
@@ -193,3 +200,12 @@ def train_net(n_epochs):
 n_epochs = 1 # start small, and increase when you've decided on your model structure and hyperparams
 
 train_net(n_epochs)
+
+# get a sample of test data again
+test_images, test_outputs, gt_pts = net_sample_output()
+
+print(test_images.data.size())
+print(test_outputs.data.size())
+print(gt_pts.size())
+
+visualize_output(test_images, test_outputs, gt_pts)
