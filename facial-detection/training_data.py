@@ -209,3 +209,9 @@ print(test_outputs.data.size())
 print(gt_pts.size())
 
 visualize_output(test_images, test_outputs, gt_pts)
+
+model_dir = 'saved_models/'
+model_name = 'keypoints_model_LeNet-5-variation.pt'
+
+# after training, save your model parameters in the dir 'saved_models'
+torch.save(net.state_dict(), model_dir+model_name)
