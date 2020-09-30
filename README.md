@@ -58,6 +58,12 @@ install PyTorch and torchvision
 conda install pytorch torchvision -c pytorch
 ```
 
+install cuda (* ref: https://github.com/pytorch/pytorch#from-source)
+```
+# Add these packages if torch.distributed is needed
+conda install pkg-config libuv
+```
+
 install other requirements
 ```
 pip install opencv-python
