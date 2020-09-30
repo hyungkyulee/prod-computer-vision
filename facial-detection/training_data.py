@@ -4,38 +4,41 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
-from models import Net
 
-net = Net()
-print(net)
-
+#
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms, utils
+from torch.autograd import Variable
+from multiprocessing import Process, freeze_support
 
 from data_load import FacialKeypointsDataset
 from data_load import Rescale, RandomCrop, Normalize, ToTensor
 
-data_transform = transforms.Compose([Rescale(256),
-                                     RandomCrop(28),
+# 1) define the data transform :
+#   - nomalisation(color to grey),
+#   - input image size(224x224),
+#   - image conversion to speed up the calculation (numpy to torch)
+data_transform = transforms.Compose([Rescale(250),
+                                     RandomCrop(224),
                                      Normalize(),
                                      ToTensor()])
 
-# testing that you've defined a transform
 assert (data_transform is not None), 'Define a data_transform'
 
-# create the transformed dataset
+# 2) create the transformed dataset
 transformed_dataset = FacialKeypointsDataset(csv_file='data/training_frames_keypoints.csv',
                                              root_dir='data/training/',
                                              transform=data_transform)
 
+# print out the sample dataset stats
 print('Number of training images: ', len(transformed_dataset))
-
-# iterate through the transformed dataset and print some stats about the first few samples
 for i in range(4):
     sample = transformed_dataset[i]
     print(i, sample['image'].size(), sample['keypoints'].size())
 
-# load training data in batches
+# 3) load training data in batches
+#   - 100 data per a batch
+#   - total batch group = 34
 batch_size = 10
 
 train_loader = DataLoader(transformed_dataset,
@@ -43,22 +46,81 @@ train_loader = DataLoader(transformed_dataset,
                           shuffle=True,
                           num_workers=0)
 
-# create the test dataset
+# 4) check the model and set the loss function for an optimisation
+from models import Net
+
+net = Net()
+print(net)
+
+import torch.optim as optim
+
+criterion = nn.SmoothL1Loss()
+optimizer = optim.Adam(net.parameters(), lr = 0.001)
+
+
+def train_net(n_epochs):
+    # prepare the net for training
+    net.train()
+
+    for epoch in range(n_epochs):  # loop over the dataset multiple times
+
+        running_loss = 0.0
+
+        # train on batches of data, assumes you already have train_loader
+        for batch_i, data in enumerate(train_loader):
+            # get the input images and their corresponding labels
+            images = data['image']
+            key_pts = data['keypoints']
+
+            # flatten pts
+            key_pts = key_pts.view(key_pts.size(0), -1)
+
+            # convert variables to floats for regression loss
+            key_pts = key_pts.type(torch.FloatTensor)
+            images = images.type(torch.FloatTensor)
+
+            optimizer.zero_grad()
+
+            # forward pass to get outputs
+            output_pts = net(images)
+
+            # calculate the loss between predicted and target keypoints
+            loss = criterion(output_pts, key_pts)
+
+            # zero the parameter (weight) gradients
+            optimizer.zero_grad()
+
+            # backward pass to calculate the weight gradients
+            loss.backward()
+
+            # update the weights
+            optimizer.step()
+
+            # print loss statistics
+            running_loss += loss.item()
+            if batch_i % 10 == 9:  # print every 100 batches
+                print('Epoch: {}, Batch: {}, Avg. Loss: {}'.format(epoch + 1, batch_i + 1, running_loss / 10))
+                running_loss = 0.0
+
+    print('Finished Training')
+
+# 5) train your network with increasing epochs from 1 to 10.
+n_epochs = 10 # start small, and increase when you've decided on your model structure and hyperparams
+
+# train_net(n_epochs)
+
+# 6) create the test dataset and load them in batches
 test_dataset = FacialKeypointsDataset(csv_file='data/test_frames_keypoints.csv',
-                                      root_dir='data/test/',
-                                      transform=data_transform)
+                                             root_dir='data/test/',
+                                             transform=data_transform)
 
-print('Number of test images: ', len(test_dataset))
-
-# load test data in batches
 batch_size = 10
-
 test_loader = DataLoader(test_dataset,
-                         batch_size=batch_size,
-                         shuffle=True,
-                         num_workers=0)
+                          batch_size=batch_size,
+                          shuffle=True,
+                          num_workers=0)
 
-# test the model on a batch of test images
+# 7) apply the trained model on the test samples
 def net_sample_output():
     # iterate through the test dataset
     for i, sample in enumerate(test_loader):
@@ -70,46 +132,33 @@ def net_sample_output():
         # convert images to FloatTensors
         images = images.type(torch.FloatTensor)
 
-        # forward pass to get net output
         output_pts = net(images)
 
         # reshape to batch_size x 68 x 2 pts
-        # in model class
+        output_pts = output_pts.view(output_pts.size()[0], 68, -1)
 
         # break after first image is tested
         if i == 0:
             return images, output_pts, key_pts
 
 
-from multiprocessing import Process, freeze_support
+test_images, test_outputs, gt_pts = net_sample_output()
 
-# call the above function
-# returns: test images, test predicted keypoints, test ground truth keypoints
-if __name__ == '__main__':
-    # freeze_support() here if program needs to be frozen
-    freeze_support()
-    test_images, test_outputs, gt_pts = net_sample_output()
-
-# print out the dimensions of the data to see if they make sense
 print(test_images.data.size())
 print(test_outputs.data.size())
 print(gt_pts.size())
 
-
+# 8) visualise the keypoints
 def show_all_keypoints(image, predicted_key_pts, gt_pts=None):
+    """Show image with predicted keypoints"""
     # image is grayscale
     plt.imshow(image, cmap='gray')
-
-###[kyu] disabled due to the error : IndexError: too many indices for array: array is 1-dimensional, but 2 were indexed
-    # plt.scatter(predicted_key_pts[:, 0], predicted_key_pts[:, 1], s=20, marker='.', c='m')
-###[kyu]
+    plt.scatter(predicted_key_pts[:, 0], predicted_key_pts[:, 1], s=20, marker='.', c='m')
     # plot ground truth points as green pts
     if gt_pts is not None:
         plt.scatter(gt_pts[:, 0], gt_pts[:, 1], s=20, marker='.', c='g')
 
 
-# visualize the output
-# by default this shows a batch of 10 images
 def visualize_output(test_images, test_outputs, gt_pts=None, batch_size=10):
     for i in range(batch_size):
         plt.figure(figsize=(20, 10))
@@ -140,78 +189,19 @@ def visualize_output(test_images, test_outputs, gt_pts=None, batch_size=10):
     plt.show()
 
 
-# call it
-visualize_output(test_images, test_outputs, gt_pts)
+# visualize_output(test_images, test_outputs, gt_pts)
 
-# loss and optimisation
-criterion = nn.CrossEntropyLoss()
-optimizer = optim.SGD(net.parameters(), lr=0.001)
-
-
-def train_net(n_epochs):
-    # prepare the net for training
-    net.train()
-
-    for epoch in range(n_epochs):  # loop over the dataset multiple times
-
-        running_loss = 0.0
-
-        # train on batches of data, assumes you already have train_loader
-        for batch_i, data in enumerate(train_loader):
-            # get the input images and their corresponding labels
-            images = data['image']
-            key_pts = data['keypoints']
-
-            # flatten pts
-            key_pts = key_pts.view(key_pts.size(0), -1)
-
-            # convert variables to floats for regression loss
-            key_pts = key_pts.type(torch.FloatTensor)
-            images = images.type(torch.FloatTensor)
-
-            # forward pass to get outputs
-            output_pts = net(images)
-
-            # calculate the loss between predicted and target keypoints
-###[kyu] disabled due to the error : RuntimeError: 1D target tensor expected, multi-target not supported
-            # loss = criterion(output_pts, key_pts)
-###
-            # zero the parameter (weight) gradients
-            optimizer.zero_grad()
-
-            # backward pass to calculate the weight gradients
-###[kyu] disabled due to the error :
-            # loss.backward()
-###
-            # update the weights
-            optimizer.step()
-
-            # print loss statistics
-###[kyu] disabled due to the error :
-            # running_loss += loss.item()
-###
-            if batch_i % 10 == 9:  # print every 10 batches
-                print('Epoch: {}, Batch: {}, Avg. Loss: {}'.format(epoch + 1, batch_i + 1, running_loss / 10))
-                running_loss = 0.0
-
-    print('Finished Training')
-
-# train your network
-n_epochs = 1 # start small, and increase when you've decided on your model structure and hyperparams
-
-train_net(n_epochs)
-
-# get a sample of test data again
-test_images, test_outputs, gt_pts = net_sample_output()
-
-print(test_images.data.size())
-print(test_outputs.data.size())
-print(gt_pts.size())
-
-visualize_output(test_images, test_outputs, gt_pts)
-
-model_dir = 'saved_models/'
-model_name = 'keypoints_model_LeNet-5-variation.pt'
-
-# after training, save your model parameters in the dir 'saved_models'
-torch.save(net.state_dict(), model_dir+model_name)
+# 9) Visualise Filters
+# summarize filters in each convolutional layer
+from keras.applications.vgg16 import VGG16
+from matplotlib import pyplot
+# load the model
+model = VGG16()
+# summarize filter shapes
+for layer in model.layers:
+	# check for convolutional layer
+	if 'conv' not in layer.name:
+		continue
+	# get filter weights
+	filters, biases = layer.get_weights()
+	print(layer.name, filters.shape)
